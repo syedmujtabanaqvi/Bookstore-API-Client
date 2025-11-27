@@ -1,0 +1,48 @@
+const axios = require('axios');
+const API = 'http://localhost:3000';
+
+// Task 10 - async callback
+async function getAllBooksAsync(cb) {
+  try {
+    const res = await axios.get(`${API}/books`);
+    cb(null, res.data);
+  } catch (err) {
+    cb(err);
+  }
+}
+
+// Task 11 - Promises
+function searchByISBN(isbn) {
+  return axios.get(`${API}/books/isbn/${isbn}`).then(res => res.data);
+}
+
+// Task 12 - async/await
+async function searchByAuthor(author) {
+  const res = await axios.get(`${API}/books/author/${encodeURIComponent(author)}`);
+  return res.data;
+}
+
+// Task 13 - async/await
+async function searchByTitle(title) {
+  const res = await axios.get(`${API}/books/title/${encodeURIComponent(title)}`);
+  return res.data;
+}
+
+async function demo() {
+  console.log("Task 10: Get all books");
+  getAllBooksAsync(async (err, data) => {
+    if (err) return console.error(err);
+    console.log(data);
+
+    console.log("\nTask 11: Search ISBN");
+    console.log(await searchByISBN(data[0].isbn));
+
+    console.log("\nTask 12: Search Author");
+    console.log(await searchByAuthor('Andy'));    
+
+    console.log("\nTask 13: Search Title");
+    console.log(await searchByTitle('Sapiens'));
+  });
+}
+
+demo();
