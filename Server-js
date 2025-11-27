@@ -1,0 +1,100 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+
+const app = express();
+app.use(bodyParser.json());
+app.use(cors());
+
+const SECRET = 'super-secret-key';
+
+// In-memory data
+const books = {
+  '9780143127741': {
+    isbn: '9780143127741',
+    title: 'Sapiens',
+    author: 'Yuval Noah Harari',
+    reviews: {}
+  },
+  '9780553418026': {
+    isbn: '9780553418026',
+    title: 'The Martian',
+    author: 'Andy Weir',
+    reviews: {}
+  }
+};
+
+const users = {};
+
+function authenticate(req, res, next) {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token' });
+  jwt.verify(token, SECRET, (err, payload) => {
+    if (err) return res.status(401).json({ message: 'Invalid token' });
+    req.user = payload.username;
+    next();
+  });
+}
+
+app.get('/books', (req, res) => {
+  res.json(Object.values(books));
+});
+
+app.get('/books/isbn/:isbn', (req, res) => {
+  const book = books[req.params.isbn];
+  if (!book) return res.status(404).json({ message: 'Not found' });
+  res.json(book);
+});
+
+app.get('/books/author/:author', (req, res) => {
+  const a = req.params.author.toLowerCase();
+  res.json(Object.values(books).filter(b => b.author.toLowerCase().includes(a)));
+});
+
+app.get('/books/title/:title', (req, res) => {
+  const t = req.params.title.toLowerCase();
+  res.json(Object.values(books).filter(b => b.title.toLowerCase().includes(t)));
+});
+
+app.get('/books/:isbn/review', (req, res) => {
+  const book = books[req.params.isbn];
+  if (!book) return res.status(404).json({ message: 'Not found' });
+  res.json(book.reviews);
+});
+
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (users[username]) return res.status(400).json({ message: 'Exists' });
+  const hash = await bcrypt.hash(password, 10);
+  users[username] = { passwordHash: hash };
+  res.json({ message: 'User registered' });
+});
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const user = users[username];
+  if (!user) return res.status(400).json({ message: 'Invalid' });
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) return res.status(400).json({ message: 'Invalid' });
+  const token = jwt.sign({ username }, SECRET, { expiresIn: '2h' });
+  res.json({ message: 'Logged in', token });
+});
+
+app.post('/books/:isbn/review', authenticate, (req, res) => {
+  const { rating, review } = req.body;
+  const book = books[req.params.isbn];
+  if (!book) return res.status(404).json({ message: 'Not found' });
+  book.reviews[req.user] = { rating, review };
+  res.json({ message: 'Review added', reviews: book.reviews });
+});
+
+app.delete('/books/:isbn/review', authenticate, (req, res) => {
+  const book = books[req.params.isbn];
+  if (!book || !book.reviews[req.user]) return res.status(404).json({ message: 'Not found' });
+  delete book.reviews[req.user];
+  res.json({ message: 'Review deleted' });
+});
+
+app.listen(3000, () => console.log('API running on http://localhost:3000'));
